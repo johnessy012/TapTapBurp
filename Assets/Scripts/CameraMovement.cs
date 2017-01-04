@@ -4,19 +4,48 @@ using UnityEngine;
 
 public class CameraMovement : MonoBehaviour {
 
-    public float Speed;
+    private Transform target;
+    private Vector3 currentRotation;
+    private float distance;
+    private float currentHeight;
 
-    private Vector3 _startingPosition;
-    private LevelCreator _levelCreator;
+    public enum CameraSettings
+    {
+        Slow,
+        Normal, 
+        Fast, 
+        SlowInverted, 
+        NormalInverted, 
+        FastInverted,
+        SlowWithTween, 
+        NormalWithTween, 
+        FastWithTween, 
+        TopDown, 
+        BehindPlayer, 
+        InfrontOfPlayer
+    };
+
+    public CameraSettings CamSettings;
 
     private void Start()
     {
-        _startingPosition = transform.position;
-        _levelCreator = FindObjectOfType<LevelCreator>();
+        target = FindObjectOfType<Player>().transform;
     }
 
     private void Update()
     {
-        transform.position += Vector3.forward * Speed * Time.deltaTime;
+        transform.position = target.position;
+
+        // Set the height of the camera
+        transform.position = new Vector3(transform.position.x ,currentHeight , transform.position.z);
+
+        // Always look at the target
+        transform.LookAt(target);        
+    }
+
+    public void SwitchCamSettings(CameraSettings setting)
+    {
+        // Set the new camera settings;
+        CamSettings = setting;
     }
 }

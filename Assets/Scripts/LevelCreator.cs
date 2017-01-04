@@ -13,10 +13,7 @@ public class LevelCreator : MonoBehaviour {
     public LevelList levelList;
 
     [SerializeField]
-    private GameObject _endOfZone;
-
-    [SerializeField]
-    private GameObject _forward, _right, _left, _rightCorner, _leftCorner, _rightForward, _leftForward;
+    private GameObject _forward, _right, _left, _rightCorner, _leftCorner, _rightForward, _leftForward, _endOfLevel;
 
     [SerializeField]
     private GameObject _lastCreatedObject;
@@ -50,7 +47,7 @@ public class LevelCreator : MonoBehaviour {
     }
 
     // JOHN - BUG - Get rid of the End of sequence for the right and left forwards, just take a left or right turn and put it in the forward position.
-    // Vector for position based on the last one.
+    // Vector for position based on the last one
 
     /// <summary>
     /// R = Right
@@ -86,10 +83,17 @@ public class LevelCreator : MonoBehaviour {
                 Debug.Log("Forward");
                 CreatePath(_forward, new Vector3(0, 0, 1), "Forward", Vector3.zero);
             }
+            // JOHN - BUG 
             if (ch == 'E')
             {
                 CreatePath(_forward ,new Vector3(0, 0, 2), "Empty", Vector3.zero);
                 Debug.Log("Empty Position");
+            }
+
+            if (ch == ';')
+            {
+                CreatePath(_endOfLevel ,new Vector3(0, 0, 2.5f), "End Of Level", Vector3.zero);
+                Debug.Log("End Of Level");
             }
 
             if (ch == 'R')

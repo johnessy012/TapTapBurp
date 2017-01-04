@@ -104,6 +104,18 @@ public class InventoryItemEditor : EditorWindow
             {
                 AddItem();
             }
+            if (GUILayout.Button("Delete Level In Inspector", GUILayout.ExpandWidth(false)))
+            {
+                foreach (var go in levelCreator.blockPositions)
+                {
+                    DestroyImmediate(go.gameObject);
+                }
+                levelCreator.blockPositions.Clear();
+            }
+            if (GUILayout.Button("Show Level", GUILayout.ExpandWidth(false)))
+            {
+                CreateLevel();
+            }
             if (GUILayout.Button("Delete Level", GUILayout.ExpandWidth(false)))
             {
                 DeleteItem(viewIndex - 1);
@@ -127,7 +139,7 @@ public class InventoryItemEditor : EditorWindow
                     if (!string.IsNullOrEmpty(levelList.levels[viewIndex - 1].LevelData))
                         CreateLevel();
                 }
-                levelList.levels[viewIndex - 1].LevelNumber = EditorGUILayout.IntField(levelList.levels[viewIndex - 1].LevelNumber);
+                levelList.levels[viewIndex - 1].Speed = EditorGUILayout.FloatField("Level Speed", levelList.levels[viewIndex - 1].Speed);
                 levelList.levels[viewIndex - 1].levelIcon = EditorGUILayout.ObjectField("Level Icon", levelList.levels[viewIndex - 1].levelIcon, typeof(Texture2D), false) as Texture2D;
 
                 GUILayout.Space(10);
@@ -141,6 +153,7 @@ public class InventoryItemEditor : EditorWindow
         if (GUI.changed)
         {
             EditorUtility.SetDirty(levelList);
+            EditorUtility.SetDirty(levelList.levels[viewIndex - 1]);
         }
     }
 

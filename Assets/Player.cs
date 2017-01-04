@@ -27,11 +27,11 @@ public class Player : MonoBehaviour {
         }
         else if (hit.tag == "Right")
         {
-            turnDirection += new Vector3(0, 90, 0);
+            turnDirection = new Vector3(0, 90, 0);
         }
         else if (hit.tag == "Left")
         {
-            turnDirection += new Vector3(0, -90, 0);
+            turnDirection = new Vector3(0, -90, 0);
         }
         else if (hit.tag == "Forward")
         {
