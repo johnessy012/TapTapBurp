@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html><head>
+  <meta http-equiv="x-ua-compatible" content="IE=Edge"/>
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
+  <link href="css/video-js.css" rel="stylesheet" type="text/css">
+  <link href="css/video.ads.css" rel="stylesheet" type="text/css">
+  <link href="css/videojs.vast.css" rel="stylesheet" type="text/css">
+
+  <style type="text/css">
+    html, body, #frame-wrapper {
+      position: relative;
+      top: 0;
+      left: 0;
+      padding: 0;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #F4F4F4;
+    }
+
+    .video-js .vjs-big-play-button,
+    .video-js .vjs-live-controls,
+    .video-js .vjs-fullscreen-control {
+      display: none;
+    }
+
+    .no-scrubber .vjs-progress-control,
+    .no-scrubber .vjs-play-control {
+      display: none;
+    }
+
+    .video-js .vjs-volume-control {
+      padding-right: 10px;
+      visibility: visible;
+    }
+
+    .content-loading {
+      background: url('css/loading.gif') no-repeat center center fixed;
+    }
+
+    .content-over {
+      background: url("about:blank") black;
+    }
+
+    #loading-wrapper {
+      position: fixed;
+      float: left;
+    }
+
+    #ad-wrapper {
+      position: inherit;
+    }
+
+    #vpaid-ad {
+      z-index: 1000;
+    }
+
+    .vast-blocker {
+      background-image: url("about:blank");
+    }
+  </style>
+
+  <!--[if lt IE 9]><script src="js/es5.js"></script><![endif]-->
+  <script src="/assets/js/jquery-1.11.2.js"></script>
+  <script src="/assets/js/base64.js"></script>
+  <script src="/assets/js/bench.js"></script>
+  <script src="/assets/js/swfobject.js"></script>
+  <script src="/assets/js/vpaid.js"></script>
+
+  <script src="js/video.js"></script>
+  <script src="js/videojs.ads.js"></script>
+  <script src="js/vast-client.js"></script>
+  <script src="js/videojs.vast.js"></script>
+
+  <script type="text/javascript">
+    videojs.options.techOrder = ["flash"];
+    videojs.options.flash.swf = window.location.pathname.replace(/[^\/]*$/, '') + "video-js.swf";   //v.js requires exact path
+
+    Bench.i = 1006;
+    Bench.sendPing("ap.video", "adplayerloaded");
+
+    var windowWidth = $(window).width();
+    var windowHeight = $(window).height();
+
+    // get user params helper function
+    function urlParam(key) {
+      var pairs = window.location.search.substring(1).split("&");
+
+      for (var i in pairs) {
+        var parts = decodeURIComponent(pairs[i]).split("=");
+        if (parts[0] == key && parts[1]) {
+          return parts[1];
+        }
+      }
+      return "";
+    }
+
+    // cross-browser base64-decoding
+    function parseBase64(base64String) {
+      var rawString = "";
+
+      if(typeof atob === "function") {
+        rawString = atob(base64String);
+      } else {
+        rawString = Base64.decode(base64String).replace(/[^ -~]/g,"");
+      }
+      return rawString;
+    }
+
+    var adTagUrl = parseBase64(urlParam("tag")),
+        contentUrl = parseBase64(urlParam("content")),
+        vpaidAd = {},
+        playerVolume = 0,
+        adStarted = false,
+        adEnded = false,
+        contentEnded = false;
+
+    // warning: volume url parameter overwrites existing volume setting
+    if (urlParam("volume") != "") {
+      playerVolume = parseFloat(urlParam("volume"))
+    }
+
+    function getMediaFile(ads) {
+      if (ads.length && ads[0].linearAd.mediaFiles.length) {
+        for (var i in ads[0].linearAd.mediaFiles) {
+          var mediaFile = ads[0].linearAd.mediaFiles[i].mimeType.toLowerCase();
+
+          if (mediaFile.indexOf("flash") > -1) {
+            return { "type": "vpaid", "index": i };
+          } else if (mediaFile.indexOf("video") > -1) {
+            return { "type": "vast", "index": i };
+          }
+        }
+
+      }
+
+      return { "type": "none", "index": -1};
+    }
+
+    // sets volumes for all players and don't choke if object isn't present
+    function setVolume(level) {
+      if (typeof vpaidAd != "undefined" && typeof vpaidAd.ad.volume == "function") {
+        vpaidAd.volume(level);
+      }
+      if (typeof player.volume == "function") {
+        player.volume(level);
+      }
+      playerVolume = level;
+    }
+
+    // the following OVA callbacks must be in the global scope
+    function onAdSchedulingComplete(ads) {
+      var mediaFile = getMediaFile(ads);
+
+      if (mediaFile.type === "vpaid") {
+        // force-resize ad placement in case a partner's intermediary swf tweaks ad size
+        vpaidAd.resizeAd(windowWidth, windowHeight);
+        $("#player").css("visibility", "hidden");
+
+        vpaidAd.startAd(mediaFile.index);
+      } else if (mediaFile.type === "vast") {
+        // VAST fallback
+        $("#ad-wrapper").remove();
+        player.ads();
+        player.vast({
+          "url": adTagUrl,
+          "skip": -1
+        });
+      } else {
+        Bench.sendPing("ap.video", "InvalidAdType");
+        return onVPAIDAdComplete({}, {});
+      }
+    }
+
+    function onVPAIDAdStart(ad, state) {
+      $("#loading-wrapper").removeClass("content-loading");
+      vpaidAd.volume(0);
+    }
+
+    function onVPAIDAdImpression(ad, state) {
+      adStarted = true;
+
+      var adData = {
+        "adSystem": ad.adSystem || '',
+        "adTitle": ad.adTitle || ''
+      };
+
+      Bench.sendPing("ap.video", "AdImpression", adData);
+    }
+
+    function onVPAIDAdClickThru(ad, state) {
+      Bench.sendPing("ap.video", "AdClickThru");
+    }
+
+    function onVPAIDAdVideoStart(ad, state) {
+      vpaidAd.volume(0);
+      Bench.sendPing("ap.video", "AdVideoStart");
+    }
+
+    function onVPAIDAdComplete(ad, state) {
+      player.trigger("adend");
+    }
+
+    function onVPAIDAdVideoComplete(ad, state) {
+      if (typeof window.external.adComplete !== "undefined") {
+        window.external.adComplete();
+      }
+
+      Bench.sendPing("ap.video", "AdVideoComplete");
+    }
+
+    function onVPAIDAdError(ad, state) {
+      onVPAIDAdComplete(ad, state);
+
+      var adData = {
+        "adSystem": ad.adSystem || '',
+        "adTitle": ad.adTitle || ''
+      };
+
+      Bench.sendPing("ap.video", "AdError", adData);
+    }
+
+    function onVPAIDAdLoaded(ad, state) {
+      var adData = {
+        "adSystem": ad.adSystem || '',
+        "adTitle": ad.adTitle || ''
+      };
+
+      Bench.sendPing("ap.video", "AdLoaded", adData);
+    }
+
+    function safeAdzerkPassback(flightId) {
+      var adosWindow = window;
+
+      try {
+        while (!adosWindow.divName) {
+          if (adosWindow == adosWindow.parent)
+            break;
+          adosWindow = adosWindow.parent
+        }
+        if (adosWindow.divName) {
+          var func = adosWindow.azk_passback || adosWindow.parent.azk_passback;
+          func(adosWindow.divName, [flightId]);
+        }
+      } catch (e) {
+        windows = [];
+        currentWindow = window;
+
+        while(currentWindow != currentWindow.parent) {
+          currentWindow = currentWindow.parent;
+          windows.push(currentWindow);
+        }
+
+        for(var i=0; i < windows.length; i++) {
+          windows[i].postMessage({flightIds: [flightId]}, '*')
+        }
+      }
+    }
+
+    function isInClientAdFrame() {
+      try {
+        var expectedParentPage = window.location.origin + window.parent.location.pathname;
+        if (window.parent.location.href.indexOf(expectedParentPage) > -1 &&     // page on same domain as parent frame
+            window.parent.location.href === window.top.location.href &&         // parent frame is top frame
+            window.top.ados !== undefined) {                                    // adzerk framework present in parent
+
+          return true;
+        }
+      } catch(e) {
+        console.log("video could not access client ad frame.");
+        return false;
+      }
+    }
+
+  </script>
+</head>
+<body>
+  <div id="loading-wrapper" class="video-js vjs-default-skin vjs-fullscreen content-loading">
+    <div id="ad-wrapper">
+      <div id="vpaid-ad"></div>
+    </div>
+    <div id="player-wrapper">
+      <video id="player" class="vjs-tech video-js vjs-default-skin"
+          controls autoplay="false" preload="none" data-setup='{}'
+          width="100%" height="100%" style="visibility: hidden;">
+      </video>
+    </div>
+  </div>
+  <script type="text/javascript">
+    $("#ad-wrapper").height(windowHeight).width(windowWidth);
+    $("#player-wrapper").height(windowHeight).width(windowWidth);
+
+    var player = videojs("player");
+
+    // video.js-only volume changer handler
+    player.on("volumechange", function(e) {
+      playerVolume = player.volume();
+    });
+
+    // keeps the player hidden until video is fully ready
+    player.on("play", function () {
+      $("#player").width(window.innerWidth).height(window.innerHeight);
+      setVolume(playerVolume);
+    });
+
+    player.on("adstart", function () {
+      adStarted = true;
+      player.removeClass("content-loading").addClass("no-scrubber");
+    });
+
+    // assuming one ad only
+    player.one("adend", function () {
+      $("#loading-wrapper").removeClass("content-loading").addClass("content-over");;
+
+      try {
+        vpaidAd.destroy();
+      } catch(e) {}
+
+      adEnded = true;
+      if (!adStarted) {
+        console.warn("video ad attempt ending; no playback occurred.");
+
+        safeAdzerkPassback(parseInt(urlParam("flightid")));
+        return;
+      }
+
+      if (isInClientAdFrame()) {
+        window.top.location.reload();
+        return;
+      }
+
+      player.removeClass("no-scrubber");
+      if (!contentUrl) {
+        contentEnded = true;
+        player.trigger("ended");
+      }
+      $("#ad-wrapper").remove();
+      $("#player").css("visibility", "visible");
+
+      player.src(contentUrl).play();
+    });
+
+    // clever hacks to hide all traces of player until its fully ready
+    player.one('adsready', function () {
+      $("#player").width(1).height(1).css("visibility", "visible");
+      player.src(contentUrl).pause();
+    });
+
+    // all routes should end through here
+   
